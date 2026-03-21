@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "fiap_cloud_games_functions": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7284",
+      "launchBrowser": false
+    }
+  }
+}

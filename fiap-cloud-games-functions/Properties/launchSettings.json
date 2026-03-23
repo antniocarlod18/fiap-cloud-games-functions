@@ -2,8 +2,14 @@
   "profiles": {
     "fiap_cloud_games_functions": {
       "commandName": "Project",
-      "commandLineArgs": "--port 7284",
-      "launchBrowser": false
+      "commandLineArgs": "--port 7284"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker",
+      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
+      "containerRunArguments": "--init",
+      "httpPort": 32639,
+      "useSSL": false
     }
   }
 }

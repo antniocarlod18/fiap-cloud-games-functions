@@ -1,25 +1,114 @@
-using System;
+using Elastic.Apm;
+using Elastic.Apm.Api;
+using FiapCloudGames.Contracts.IntegrationEvents;
+using MassTransit;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
-using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace fiap_cloud_games_functions;
 
 public class FunctionApps
 {
     private readonly ILogger _logger;
+    private readonly IPublishEndpoint _publishEndpoint;
 
-    public FunctionApps(ILoggerFactory loggerFactory)
+    public FunctionApps(ILoggerFactory loggerFactory, IPublishEndpoint publishEndpoint)
     {
         _logger = loggerFactory.CreateLogger<FunctionApps>();
+        _publishEndpoint = publishEndpoint;
+    }    
+
+    [Function("FunctionProcessPayment")]
+    public async Task ProcessPayment([RabbitMQTrigger("payment-queue", ConnectionStringSetting = "RabbitMQ:Connection")] string myQueueItem,
+        IDictionary<string, object> headers)
+    {
+        headers.TryGetValue("traceparent", out var traceParentObj);
+        var traceParent = traceParentObj?.ToString();
+
+        ITransaction? transaction = null;
+
+        if (!string.IsNullOrEmpty(traceParent))
+        {
+            var distributedTracingData = DistributedTracingData.TryDeserializeFromString(traceParent);
+
+            transaction = Agent.Tracer.StartTransaction(
+                "ProcessPayment",
+                ApiConstants.TypeRequest,
+                distributedTracingData
+            );
+        }
+        else
+        {
+            // fallback (sem trace)
+            transaction = Agent.Tracer.StartTransaction(
+                "ProcessPayment",
+                ApiConstants.TypeRequest
+            );
+        }
+
+        _logger.LogInformation("Received payment message: {item}", myQueueItem);
+
+        try
+        {    
+             var msg = JsonSerializer.Deserialize<PaymentMessage>(myQueueItem, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (msg == null)
+            {
+                _logger.LogWarning("Payment message deserialized to null");
+                return;
+            }
+
+            // Simulate payment processing
+            _logger.LogInformation("Processing payment for order {orderId} amount {amount} method {method}", msg.OrderId, msg.Price, msg.Method);
+            await Task.Delay(200);
+
+            var status = msg.Price > 0 && msg.Price <= 1000m ? PaymentStatusEnum.Approved : PaymentStatusEnum.Rejected;
+
+            SendPaymentProcessed(msg.OrderId, msg.UserId, status);
+        }
+        catch (JsonException jex)
+        {
+            _logger.LogError(jex, "Failed to deserialize payment message");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing payment message");
+        }
     }
 
     [Function("FunctionSendNotification")]
-    public async Task SendNotification([RabbitMQTrigger("queue:notification-queue", ConnectionStringSetting = "RabbitMQ:Connection")] string myQueueItem)
+    public async Task SendNotification([RabbitMQTrigger("notification-queue", ConnectionStringSetting = "RabbitMQ:Connection")] string myQueueItem,
+        IDictionary<string, object> headers)
     {
+        headers.TryGetValue("traceparent", out var traceParentObj);
+        var traceParent = traceParentObj?.ToString();
+
+        ITransaction? transaction = null;
+
+        if (!string.IsNullOrEmpty(traceParent))
+        {
+            var distributedTracingData = DistributedTracingData.TryDeserializeFromString(traceParent);
+
+            transaction = Agent.Tracer.StartTransaction(
+                "SendNotification",
+                ApiConstants.TypeRequest,
+                distributedTracingData
+            );
+        }
+        else
+        {
+            // fallback (sem trace)
+            transaction = Agent.Tracer.StartTransaction(
+                "SendNotification",
+                ApiConstants.TypeRequest
+            );
+        }
+
         _logger.LogInformation("Received notification message: {item}", myQueueItem);
 
         try
@@ -58,6 +147,28 @@ public class FunctionApps
         _logger.LogInformation("Notification sent to {email}", msg.Email);
     }
 
+    public async Task SendPaymentProcessed(string orderId, string userId, PaymentStatusEnum status)
+    {
+        try
+        {
+            await _publishEndpoint.Publish<PaymentProcessedIntegrationEvent>(new()
+            {
+                OrderId = Guid.Parse(orderId),
+                UserId = Guid.Parse(userId),
+                Status = status
+            });
+
+            _logger.LogInformation("Published PaymentProcessedIntegrationEvent for OrderId: {OrderId}", orderId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error publishing PaymentProcessedIntegrationEvent for OrderId: {OrderId}", orderId);
+            throw;
+        }
+
+        return;
+    }
+
     private class NotificationMessage
     {
         [JsonPropertyName("email")]
@@ -68,5 +179,23 @@ public class FunctionApps
 
         [JsonPropertyName("message")]
         public string Message { get; set; } = string.Empty;
+    }
+
+    private class PaymentMessage
+    {
+        [JsonPropertyName("orderId")]
+        public string OrderId { get; set; } = string.Empty;
+
+        [JsonPropertyName("userId")]
+        public string UserId { get; set; } = string.Empty;
+
+        [JsonPropertyName("price")]
+        public decimal Price { get; set; }
+
+        [JsonPropertyName("currency")]
+        public string Currency { get; set; } = "BRL";
+
+        [JsonPropertyName("method")]
+        public string Method { get; set; } = string.Empty;
     }
 }

@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="fiap-cloud-games-functions/fiap-cloud-games-functions.csproj" />
+  <Project Path="FiapCloudGames.Contracts/FiapCloudGames.Contracts.csproj" Id="edcc2b5f-b6ea-4619-8576-5d529b14483b" />
 </Solution>

@@ -1,8 +1,5 @@
 {
   "dependencies": {
-    "appInsights1": {
-      "type": "appInsights"
-    },
     "secrets1": {
       "type": "secrets"
     },
@@ -10,6 +7,14 @@
       "type": "rabbitmq",
       "connectionId": "QueueConnection",
       "dynamicId": null
+    },
+    "storage1": {
+      "type": "storage",
+      "connectionId": "AzureWebJobsStorage"
+    },
+    "appInsights1": {
+      "type": "appInsights",
+      "connectionId": "APPLICATIONINSIGHTS_CONNECTION_STRING"
     }
   }
 }

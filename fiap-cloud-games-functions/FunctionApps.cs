@@ -21,38 +21,15 @@ public class FunctionApps
     }    
 
     [Function("FunctionProcessPayment")]
-    public async Task ProcessPayment([RabbitMQTrigger("payment-queue", ConnectionStringSetting = "RabbitMQ:Connection")] string myQueueItem,
-        IDictionary<string, object> headers)
+    public async Task ProcessPayment([ServiceBusTrigger("payment-queue", Connection = "ServiceBus:Connection")] string myQueueItem1)
     {
-        headers.TryGetValue("traceparent", out var traceParentObj);
-        var traceParent = traceParentObj?.ToString();
-
-        ITransaction? transaction = null;
-
-        if (!string.IsNullOrEmpty(traceParent))
-        {
-            var distributedTracingData = DistributedTracingData.TryDeserializeFromString(traceParent);
-
-            transaction = Agent.Tracer.StartTransaction(
-                "ProcessPayment",
-                ApiConstants.TypeRequest,
-                distributedTracingData
-            );
-        }
-        else
-        {
-            // fallback (sem trace)
-            transaction = Agent.Tracer.StartTransaction(
-                "ProcessPayment",
-                ApiConstants.TypeRequest
-            );
-        }
-
-        _logger.LogInformation("Received payment message: {item}", myQueueItem);
+        _logger.LogInformation(myQueueItem1);
+        ITransaction? transaction = Agent.Tracer.StartTransaction("ProcessPayment", ApiConstants.TypeRequest);
+        _logger.LogInformation("Received payment message: {item}", myQueueItem1);
 
         try
-        {    
-             var msg = JsonSerializer.Deserialize<PaymentMessage>(myQueueItem, new JsonSerializerOptions
+        {
+             var msg = JsonSerializer.Deserialize<PaymentMessage>(myQueueItem1, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
@@ -82,38 +59,14 @@ public class FunctionApps
     }
 
     [Function("FunctionSendNotification")]
-    public async Task SendNotification([RabbitMQTrigger("notification-queue", ConnectionStringSetting = "RabbitMQ:Connection")] string myQueueItem,
-        IDictionary<string, object> headers)
+    public async Task SendNotification([ServiceBusTrigger("notification-queue", Connection = "ServiceBus:Connection")] string myQueueItem2)
     {
-        headers.TryGetValue("traceparent", out var traceParentObj);
-        var traceParent = traceParentObj?.ToString();
-
-        ITransaction? transaction = null;
-
-        if (!string.IsNullOrEmpty(traceParent))
-        {
-            var distributedTracingData = DistributedTracingData.TryDeserializeFromString(traceParent);
-
-            transaction = Agent.Tracer.StartTransaction(
-                "SendNotification",
-                ApiConstants.TypeRequest,
-                distributedTracingData
-            );
-        }
-        else
-        {
-            // fallback (sem trace)
-            transaction = Agent.Tracer.StartTransaction(
-                "SendNotification",
-                ApiConstants.TypeRequest
-            );
-        }
-
-        _logger.LogInformation("Received notification message: {item}", myQueueItem);
+        ITransaction? transaction = Agent.Tracer.StartTransaction("SendNotification", ApiConstants.TypeRequest);
+        _logger.LogInformation("Received notification message: {item}", myQueueItem2);
 
         try
         {
-            var msg = JsonSerializer.Deserialize<NotificationMessage>(myQueueItem, new JsonSerializerOptions
+            var msg = JsonSerializer.Deserialize<NotificationMessage>(myQueueItem2, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
